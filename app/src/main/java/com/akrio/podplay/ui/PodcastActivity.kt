@@ -21,13 +21,14 @@ import com.akrio.podplay.databinding.ActivityPodcastBinding
 import com.akrio.podplay.repository.ItunesRepo
 import com.akrio.podplay.repository.PodcastRepo
 import com.akrio.podplay.service.ItunesService
+import com.akrio.podplay.service.RssFeedService
 import com.akrio.podplay.viewmodel.PodcastViewModel
 import com.akrio.podplay.viewmodel.SearchViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class PodcastActivity : AppCompatActivity() {
+class PodcastActivity : AppCompatActivity(), PodcastDetailsFragment.OnPodcastDetailsListener {
 
     companion object {
         private const val TAG_DETAILS_FRAGMENT = "DetailsFragment"
@@ -49,6 +50,7 @@ class PodcastActivity : AppCompatActivity() {
         setupToolbar()
         setupViewModels()
         updateControls()
+        createSubscription()
         handleIntent(intent)
         addBackStackListener()
 
@@ -78,14 +80,20 @@ class PodcastActivity : AppCompatActivity() {
     }
 
     private fun onShowDetails(podcastSummaryViewData: SearchViewModel.PodcastSummaryViewData) {
-        val feedUrl = podcastSummaryViewData.feedUrl ?: return
-        showProgressBar()
-        val podcast = podcastViewModel.getPodcast(podcastSummaryViewData)
-        hideProgressBar()
-        if (podcast != null) {
-            showDetailsFragment()
-        } else {
-            showError("Error loading feed $feedUrl")
+        podcastSummaryViewData?.feedUrl?.let {
+            showProgressBar()
+            podcastViewModel.getPodcast(podcastSummaryViewData)
+        }
+    }
+
+    private fun createSubscription() {
+        podcastViewModel.podcastLiveData.observe(this) {
+            hideProgressBar()
+            if (it != null) {
+                showDetailsFragment()
+            } else {
+                showError("Error loading feed")
+            }
         }
     }
 
@@ -133,7 +141,8 @@ class PodcastActivity : AppCompatActivity() {
     private fun setupViewModels() {
         val service = ItunesService.instance
         searchViewModel.iTunesRepo = ItunesRepo(service)
-        podcastViewModel.podcastRepo = PodcastRepo()
+        val rssService = RssFeedService.instance
+        podcastViewModel.podcastRepo = PodcastRepo(rssService, podcastViewModel.podcastDao)
     }
 
     private fun updateControls() {
@@ -201,5 +210,10 @@ class PodcastActivity : AppCompatActivity() {
                 binding.podcastRecyclerView.visibility = View.VISIBLE
             }
         }
+    }
+
+    override fun onSubscribe() {
+        podcastViewModel.saveActivePodcast()
+        supportFragmentManager.popBackStack()
     }
 }
